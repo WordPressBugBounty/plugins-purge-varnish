@@ -3,8 +3,8 @@ Contributors: devavi
 Donate link: http://avantikayadav.com/donate.html
 Tags: varnish, purge, cache, caching, flush, plugin, wp-cache, performance, fast, automatic
 Requires at least: 4.0
-Tested up to: 6.3.3
-Stable tag: 1.1.4
+Tested up to: 7.0
+Stable tag: 1.1.5
 License: GPLv2 or later
 
 Clean clear VARNISH cache automatically when content on your site is created or modified, also allow you to purge VARNISH cache manually.
@@ -104,13 +104,15 @@ DOMAIN_NAME/wp-admin/admin.php?page=purge-varnish-expire to configure purge expi
 
 7. Purge URLs screen to purge URLs manually from varnish cache. 
 
-== ChangeLog ==
+== Changelog ==
+= 1.1.5 =
+Fix:
+1. Compatibility update for WordPress 7.x.
+2. Hardening for newer PHP/WordPress runtime behavior.
+
 = 1.1.4 =
 Fix: 
 1. PHP 8 error: socket_connect()
-
-
-== ChangeLog ==
 = 1.1.3 =
 
 Fix: 

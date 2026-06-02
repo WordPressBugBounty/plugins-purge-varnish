@@ -4,7 +4,9 @@
   Plugin Name: Purge Varnish
   Description: This plugin provides integration between your wordpress site and Varnish Cache to purge cache objects automate/manaully.
   as per configurations or allow to purge specific URLs.
-  Version: 2.6
+  Version: 1.1.5
+  Requires at least: 4.0
+  Tested up to: 7.0
   Author: Dsingh <dev.firoza@gmail.com>
   Author URI: https://profiles.wordpress.org/devavi
   License: GPLv2+
@@ -107,7 +109,7 @@ class Purge_Varnish {
         if (!extension_loaded('sockets')) {
             $logdata = 'You need to enable/install sockets module.';
             $this->purge_varnish_debug($basedir, $logdata);
-            error_log($log, 0);
+            error_log($logdata, 0);
             return false;
         }
 
@@ -121,6 +123,10 @@ class Purge_Varnish {
 
         $terminals = explode(' ', get_option('varnish_control_terminal', self::PURGE_VARNISH_DEFAULT_TREMINAL));
         foreach ($terminals as $terminal) {
+            if (strpos($terminal, ':') === false) {
+                $ret[$terminal] = false;
+                continue;
+            }
             list($server, $port) = explode(':', $terminal);
             $client = socket_create(AF_INET, SOCK_STREAM, getprotobyname('tcp'));
             socket_set_option($client, SOL_SOCKET, SO_SNDTIMEO, array('sec' => $seconds, 'usec' => $microseconds));
@@ -162,7 +168,6 @@ class Purge_Varnish {
                 $logdata = '';
                 $this->purge_varnish_debug($basedir, $command);
 
-                $result = socket_write($client, "$command\n");
                 if ($status = $this->purge_varnish_execute_command($client, $command)) {
                     $ret[$terminal][$command] = $status;
                 }
@@ -321,9 +326,9 @@ class Purge_Varnish {
             $stats_msg = $resp_stats['msg'];
 
             if ($stats_code == 200) {
-		$path = isset($parse_url['path']) & !empty($parse_url['path']) ? $parse_url['path'] : '';
-		$url = isset($_POST['url']) & !empty($_POST['url']) ? $_POST['url'] : '';
-		
+                $path = isset($parse_url['path']) && !empty($parse_url['path']) ? $parse_url['path'] : '';
+                $url = isset($_POST['url']) && !empty($_POST['url']) ? $_POST['url'] : '';
+
                 $stats_msg = 'The page url <a href="' . esc_url($url) . '" target="@target" style="color:#228B22;"><i>"' . esc_url($path) . '"</i></a> has been purged.';
                 $msg .= '<li style="color:#228B22;list-style-type: circle;">All Varnish cache has been purged successfuly!</li>';
             } else {
@@ -341,7 +346,7 @@ class Purge_Varnish {
         $outout = '';
         $purge_msg = '';
         if (!count($urls)) {
-            return '<ul><li style="color:#8B0000;">' . esc_html_e('Please enter at leat one url for purge.') . '</li></ul>';
+            return '<ul><li style="color:#8B0000;">' . esc_html__('Please enter at leat one url for purge.', 'purge-varnish') . '</li></ul>';
         }
 
         foreach ($urls as $url) {
@@ -450,33 +455,41 @@ class Purge_Varnish {
     }
 
     function purge_varnish_is_post_object($post) {
-        if ((!is_object($post) || !isset($post->post_type))) {
+        if (!is_object($post) || !isset($post->post_type)) {
             return false;
         }
+
+        return true;
     }
 
     function purge_varnish_is_publish_post_object($post) {
-        if (is_object($post) || $post->post_status <> 'publish') {
-            return;
+        if (!is_object($post) || $post->post_status !== 'publish') {
+            return false;
         }
+
+        return true;
     }
 
     function purge_varnish_post_is_attachment($post) {
-        if (is_object($post->post_type) && $post->post_type == 'attachment') {
-            return;
+        if (is_object($post) && isset($post->post_type) && $post->post_type === 'attachment') {
+            return true;
         }
+
+        return false;
     }
 
     function purge_varnish_post_is_nav_menu_item($post) {
-        if (is_object($post->post_type) && $post->post_type == 'nav_menu_item') {
-            return;
+        if (is_object($post) && isset($post->post_type) && $post->post_type === 'nav_menu_item') {
+            return true;
         }
+
+        return false;
     }
 
     function purge_varnish_post_custom_urls() {
         $purge_varnish_expire = get_option('purge_varnish_expire', '');
         if (!empty($purge_varnish_expire)) {
-            $expire = unserialize($purge_varnish_expire);
+            $expire = maybe_unserialize($purge_varnish_expire);
             $expire_custom_url = isset($expire['post_custom_url']) ? $expire['post_custom_url'] : '';
             if (!empty($expire_custom_url)) {
                 $custom_urls = isset($expire['post_custom_urls']) ? $expire['post_custom_urls'] : '';
@@ -497,7 +510,7 @@ class Purge_Varnish {
     function purge_varnish_comment_custom_urls() {
         $purge_varnish_expire = get_option('purge_varnish_expire', '');
         if (!empty($purge_varnish_expire)) {
-            $expire = unserialize($purge_varnish_expire);
+            $expire = maybe_unserialize($purge_varnish_expire);
             $expire_custom_url = isset($expire['comment_custom_url']) ? $expire['comment_custom_url'] : '';
             if (!empty($expire_custom_url)) {
                 $custom_urls = isset($expire['comment_custom_urls']) ? $expire['comment_custom_urls'] : '';
@@ -515,7 +528,7 @@ class Purge_Varnish {
     function purge_varnish_navmenu_custom_urls() {
         $purge_varnish_expire = get_option('purge_varnish_expire', '');
         if (!empty($purge_varnish_expire)) {
-            $expire = unserialize($purge_varnish_expire);
+            $expire = maybe_unserialize($purge_varnish_expire);
             $expire_custom_url = isset($expire['navmenu_custom_url']) ? $expire['navmenu_custom_url'] : '';
             if (!empty($expire_custom_url)) {
                 $custom_urls = isset($expire['navmenu_custom_urls']) ? $expire['navmenu_custom_urls'] : '';
@@ -533,7 +546,7 @@ class Purge_Varnish {
     function purge_varnish_wp_theme_custom_urls() {
         $purge_varnish_expire = get_option('purge_varnish_expire', '');
         if (!empty($purge_varnish_expire)) {
-            $expire = unserialize($purge_varnish_expire);
+            $expire = maybe_unserialize($purge_varnish_expire);
             $expire_custom_url = isset($expire['wp_theme_custom_url']) ? $expire['wp_theme_custom_url'] : '';
             if (!empty($expire_custom_url)) {
                 $custom_urls = isset($expire['wp_theme_custom_urls']) ? $expire['wp_theme_custom_urls'] : '';
@@ -557,7 +570,7 @@ class Purge_Varnish {
         $purge_varnish_expire = get_option('purge_varnish_expire', '');
 
         if (!empty($purge_varnish_expire)) {
-            $expire = unserialize($purge_varnish_expire);
+            $expire = maybe_unserialize($purge_varnish_expire);
             if (is_array($expire)) {
                 $uploads_path = wp_upload_dir();
                 foreach ($expire as $page) {
@@ -591,13 +604,21 @@ class Purge_Varnish {
         $post = get_post($ID);
 
         // Halt exection if not have post object
-        $this->purge_varnish_is_post_object($post);
+        if (!$this->purge_varnish_is_post_object($post)) {
+            return;
+        }
         // Halt exection if post type is nav_menu_item.
-        $this->purge_varnish_post_is_nav_menu_item($post);
+        if ($this->purge_varnish_post_is_nav_menu_item($post)) {
+            return;
+        }
         // Halt exection if post staus in not publish.
-        $this->purge_varnish_is_publish_post_object($post);
+        if (!$this->purge_varnish_is_publish_post_object($post)) {
+            return;
+        }
         // Halt exection if post type is attachment.
-        $this->purge_varnish_post_is_attachment($post);
+        if ($this->purge_varnish_post_is_attachment($post)) {
+            return;
+        }
         // Callback to purge
         $this->purge_varnish_trigger_post_expire($post);
     }
@@ -618,9 +639,13 @@ class Purge_Varnish {
             $post = get_post($comment_post_id);
 
             // Halt exection if not have post object
-            $this->purge_varnish_is_post_object($post);
+            if (!$this->purge_varnish_is_post_object($post)) {
+                return;
+            }
             // Halt exection if post type is attachment.
-            $this->purge_varnish_post_is_attachment($post);
+            if ($this->purge_varnish_post_is_attachment($post)) {
+                return;
+            }
             $this->purge_varnish_trigger_post_expire($post);
         } else {
             return;
@@ -634,9 +659,13 @@ class Purge_Varnish {
     function purge_varnish_post_status_trigger($new_status, $old_status, $post) {
 
         // Halt exection if not have post object
-        $this->purge_varnish_is_post_object($post);
+        if (!$this->purge_varnish_is_post_object($post)) {
+            return;
+        }
         // Halt exection if post type is attachment.
-        $this->purge_varnish_post_is_attachment($post);
+        if ($this->purge_varnish_post_is_attachment($post)) {
+            return;
+        }
 
         // Cause with wp_update_nav_menu
         if ($new_status == $old_status) {
@@ -662,11 +691,17 @@ class Purge_Varnish {
         $post = get_post($ID);
 
         // Halt exection if not have post object
-        $this->purge_varnish_is_post_object($post);
+        if (!$this->purge_varnish_is_post_object($post)) {
+            return;
+        }
         // Halt exection if post staus in not publish.
-        $this->purge_varnish_is_publish_post_object($post);
+        if (!$this->purge_varnish_is_publish_post_object($post)) {
+            return;
+        }
         // Halt exection if post type is attachment.
-        $this->purge_varnish_post_is_attachment($post);
+        if ($this->purge_varnish_post_is_attachment($post)) {
+            return;
+        }
         // Call to purge
         $this->purge_varnish_trigger_post_expire($post);
     }
@@ -679,7 +714,7 @@ class Purge_Varnish {
         // Fetch expiry configuration details.
         $purge_varnish_expire = get_option('purge_varnish_expire', '');
         if (!empty($purge_varnish_expire)) {
-            $expire = unserialize($purge_varnish_expire);
+            $expire = maybe_unserialize($purge_varnish_expire);
             if (is_array($expire)) {
                 foreach ($expire as $page) {
                     switch ($page) {
@@ -711,7 +746,9 @@ class Purge_Varnish {
             $post = get_post($post_id);
 
             // Halt exection if not have post object
-            $this->purge_varnish_is_post_object($post);
+            if (!$this->purge_varnish_is_post_object($post)) {
+                return;
+            }
             if ($post->post_status == 'publish') {
                 $this->purge_varnish_trigger_post_expire($post);
             }
@@ -731,7 +768,9 @@ class Purge_Varnish {
             $post = get_post($post_id);
 
             // Halt exection if not have post object
-            $this->purge_varnish_is_post_object($post);
+            if (!$this->purge_varnish_is_post_object($post)) {
+                return;
+            }
             if ($post->post_status == 'publish') {
                 $this->purge_varnish_trigger_post_expire($post);
             }
@@ -747,10 +786,10 @@ class Purge_Varnish {
     function purge_varnish_update_nav_menu_trigger($nav_menu_id) {
 
         $items = wp_get_nav_menu_items($nav_menu_id);
-        if (is_object($items) && count($items) > 0) {
+        if (is_array($items) && count($items) > 0) {
             $purge_varnish_expire = get_option('purge_varnish_expire', '');
             if (!empty($purge_varnish_expire)) {
-                $expire = unserialize($purge_varnish_expire);
+                $expire = maybe_unserialize($purge_varnish_expire);
                 if (is_array($expire)) {
                     foreach ($expire as $page) {
                         switch ($page) {
@@ -777,8 +816,7 @@ class Purge_Varnish {
      */
 
     function purge_varnish_menunav_links($items) {
-        array_unique($a, SORT_STRING);
-        array_unique($a, SORT_NUMERIC);
+        $items = array_unique($items, SORT_REGULAR);
         foreach ($items as $item) {
             $url = $item->url;
             $url = isset($url) && !empty($url) ? $url : '/';
@@ -810,8 +848,7 @@ class Purge_Varnish {
      */
 
     function purge_varnish_nonce($vp_nonce) {
-        $wp_nonce = $_REQUEST['_wpnonce'];
-        $referer_nonce = $vp_nonce . '_referer';
+        $wp_nonce = isset($_REQUEST['_wpnonce']) ? sanitize_text_field(wp_unslash($_REQUEST['_wpnonce'])) : '';
 
         if (!wp_verify_nonce($wp_nonce, $vp_nonce)) {
             return '<ul><li style="color:#8B0000;">Sorry! Invalid nonce.</li></ul>';
@@ -910,7 +947,7 @@ class Purge_Varnish {
     function purge_varnish_switch_theme_trigger($theme) {
         $purge_varnish_expire = get_option('purge_varnish_expire', '');
         if (!empty($purge_varnish_expire)) {
-            $expire = unserialize($purge_varnish_expire);
+            $expire = maybe_unserialize($purge_varnish_expire);
             if (is_array($expire)) {
                 foreach ($expire as $page) {
                     switch ($page) {
@@ -965,7 +1002,7 @@ add_action('admin_head', array($purge_varnish, 'purge_varnish_register_styles'))
 // Trigger post action to purge varnish objects.
 $purge_varnish_action = get_option('purge_varnish_action', '');
 if (!empty($purge_varnish_action)) {
-    $actions = unserialize($purge_varnish_action);
+    $actions = maybe_unserialize($purge_varnish_action);
     if (is_array($actions)) {       
         foreach ($actions as $action) {
             switch ($action) {
